@@ -74,7 +74,13 @@ export async function getAuthMode(env: Env): Promise<{ mode: AuthMode; source: A
     console.error("Failed to check admin_password_hash in D1:", err);
   }
 
-  return { mode: "open", source: "none" };
+  // A public admin console is opt-in only. New installations stay in setup mode
+  // until a password is configured; existing passwords always take precedence.
+  if (env.ALLOW_OPEN_ACCESS?.trim().toLowerCase() === "true") {
+    return { mode: "open", source: "none" };
+  }
+
+  return { mode: "setup", source: "none" };
 }
 
 function extractBearerToken(request: Request): string | null {
@@ -107,7 +113,7 @@ export async function handleAuthStatus(request: Request, env: Env): Promise<Resp
   const statusData: AuthStatusResponse = {
     mode,
     source,
-    authenticated: mode === "open" ? true : authenticated,
+    authenticated: mode === "open" || (mode === "enforced" && authenticated),
   };
 
   return json({ ok: true, data: statusData });
@@ -152,8 +158,9 @@ export async function handleAuthLogin(request: Request, env: Env): Promise<Respo
       console.error("Failed to verify D1 password:", err);
     }
   } else {
-    // Mode is open, any or no password can enter
-    verified = true;
+    // No password is configured: passwordless login is allowed only when the
+    // operator explicitly opted into an open console.
+    verified = mode === "open";
   }
 
   if (!verified) {
@@ -212,12 +219,12 @@ export async function handleAuthSetup(request: Request, env: Env): Promise<Respo
   const body = (await request.json().catch(() => ({}))) as { password?: unknown };
   const newPassword = typeof body.password === "string" ? body.password : "";
 
-  if (!newPassword || newPassword.length < 4) {
+  if (!newPassword || newPassword.length < 12) {
     return json(
       {
         ok: false,
         errorCode: 400,
-        description: "Password must be at least 4 characters",
+        description: "Password must be at least 12 characters",
         reason: "invalid_request",
       },
       400,
@@ -260,7 +267,7 @@ export async function handleAuthSetup(request: Request, env: Env): Promise<Respo
 /**
  * POST /api/auth/remove
  *
- * Removes D1 password protection and returns console to open access mode.
+ * Removes the D1 password; the console returns to locked first-run setup unless open access was explicitly enabled.
  */
 export async function handleAuthRemove(request: Request, env: Env): Promise<Response> {
   const { source } = await getAuthMode(env);
@@ -301,7 +308,8 @@ export async function handleAuthRemove(request: Request, env: Env): Promise<Resp
 export async function authenticateApiRequest(request: Request, env: Env): Promise<Response | null> {
   const { mode } = await getAuthMode(env);
 
-  // If in open mode, allow access
+  // Open access is only available when explicitly enabled by the operator.
+  // Setup mode remains locked: only /api/auth/setup can establish the password.
   if (mode === "open") {
     return null;
   }

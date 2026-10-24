@@ -2,17 +2,13 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import type { AuthMode, AuthSource, AuthStatusResponse, AuthLoginResponse } from "../../shared/rpcTypes";
 import { api, clearAuthToken, getAuthToken, setAuthToken } from "./api";
 
-const SKIP_SETUP_KEY = "tg_auth_skip_setup";
-
 interface AuthContextValue {
   mode: AuthMode;
   source: AuthSource;
   authenticated: boolean;
   loading: boolean;
-  skippedSetup: boolean;
   login: (password: string) => Promise<{ ok: boolean; error?: string }>;
   setup: (password: string) => Promise<{ ok: boolean; error?: string }>;
-  skipSetup: () => void;
   logout: () => void;
   removePassword: () => Promise<{ ok: boolean; error?: string }>;
   refreshStatus: () => Promise<void>;
@@ -21,18 +17,10 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [mode, setMode] = useState<AuthMode>("open");
+  const [mode, setMode] = useState<AuthMode>("setup");
   const [source, setSource] = useState<AuthSource>("none");
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [skippedSetup, setSkippedSetup] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(SKIP_SETUP_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
-
   const checkStatus = async () => {
     try {
       const res = await api.get<AuthStatusResponse>("/api/auth/status");
@@ -81,15 +69,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { ok: false, error: res.description || "Failed to set password" };
   };
 
-  const skipSetup = () => {
-    try {
-      localStorage.setItem(SKIP_SETUP_KEY, "true");
-    } catch {
-      // ignore
-    }
-    setSkippedSetup(true);
-  };
-
   const logout = () => {
     clearAuthToken();
     setAuthenticated(false);
@@ -113,10 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         source,
         authenticated,
         loading,
-        skippedSetup,
         login,
         setup,
-        skipSetup,
         logout,
         removePassword,
         refreshStatus: checkStatus,

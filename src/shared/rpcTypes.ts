@@ -187,7 +187,7 @@ export interface SavedTaskWithToken extends SavedTaskSummary {
 
 // Authentication
 
-export type AuthMode = "enforced" | "open";
+export type AuthMode = "setup" | "enforced" | "open";
 export type AuthSource = "env" | "d1" | "none";
 
 export interface AuthStatusResponse {

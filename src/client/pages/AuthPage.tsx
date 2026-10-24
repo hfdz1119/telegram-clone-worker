@@ -7,8 +7,8 @@ interface AuthPageProps {
 }
 
 export function AuthPage({ mode: forceMode, onCancel }: AuthPageProps) {
-  const { mode: currentAuthMode, source, login, setup, skipSetup } = useAuth();
-  const isSetup = forceMode === "setup" || (currentAuthMode === "open" && forceMode !== "login");
+  const { mode: currentAuthMode, source, login, setup } = useAuth();
+  const isSetup = forceMode === "setup" || (currentAuthMode === "setup" && forceMode !== "login");
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -21,8 +21,8 @@ export function AuthPage({ mode: forceMode, onCancel }: AuthPageProps) {
     setError(null);
 
     if (isSetup) {
-      if (!password || password.length < 4) {
-        setError("Password must be at least 4 characters long");
+      if (!password || password.length < 12) {
+        setError("Password must be at least 12 characters long");
         return;
       }
       if (password !== confirmPassword) {
@@ -70,7 +70,7 @@ export function AuthPage({ mode: forceMode, onCancel }: AuthPageProps) {
           </h1>
           <p className="auth-subtitle">
             {isSetup
-              ? "Set a master password to restrict access to this Cloudflare Worker, or proceed with open access."
+              ? "Set a master password before opening the console. Until setup is complete, admin endpoints stay locked."
               : "Enter your master password to access the Telegram Clone Worker console."}
           </p>
 
@@ -108,7 +108,7 @@ export function AuthPage({ mode: forceMode, onCancel }: AuthPageProps) {
                 id="auth-password"
                 type={showPassword ? "text" : "password"}
                 className="input auth-input"
-                placeholder={isSetup ? "Enter at least 4 characters" : "Enter password"}
+                placeholder={isSetup ? "Enter at least 12 characters" : "Enter password"}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoFocus
@@ -171,14 +171,14 @@ export function AuthPage({ mode: forceMode, onCancel }: AuthPageProps) {
               )}
             </button>
 
-            {isSetup && (
+            {isSetup && onCancel && (
               <button
                 type="button"
                 className="btn btn-secondary auth-btn-skip"
-                onClick={onCancel ? onCancel : skipSetup}
+                onClick={onCancel}
                 disabled={submitting}
               >
-                {onCancel ? "Cancel" : "Skip for now — Proceed without password"}
+                Cancel
               </button>
             )}
           </div>
@@ -186,7 +186,7 @@ export function AuthPage({ mode: forceMode, onCancel }: AuthPageProps) {
 
         {isSetup && !onCancel && (
           <p className="auth-footnote">
-            Tip: You can always set or change your password later directly in the console navigation or via the Cloudflare Dashboard.
+            Use a unique password with at least 12 characters. For unattended setup, configure the ADMIN_PASSWORD secret before exposing the Worker.
           </p>
         )}
       </div>

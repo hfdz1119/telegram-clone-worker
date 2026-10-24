@@ -28,7 +28,7 @@ function Page() {
 }
 
 function MainShell() {
-  const { mode, authenticated, loading, skippedSetup } = useAuth();
+  const { mode, authenticated, loading } = useAuth();
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
       return (
@@ -67,14 +67,13 @@ function MainShell() {
     );
   }
 
-  // If password is required and user is not authenticated: render login
+  // First-run setup is mandatory unless the operator explicitly opts into
+  // passwordless access. Existing protected installs require a valid session.
+  if (mode === "setup") {
+    return <AuthPage mode="setup" />;
+  }
   if (mode === "enforced" && !authenticated) {
     return <AuthPage mode="login" />;
-  }
-
-  // If in open mode and user has never chosen to skip setup: render setup
-  if (mode === "open" && !skippedSetup) {
-    return <AuthPage mode="setup" />;
   }
 
   return (

@@ -1,4 +1,4 @@
-# Telegram Clone Worker
+# Telegram Backup & Chat Worker
 
 <p align="center">
   <img src="https://img.shields.io/badge/Cloudflare_Workers-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Workers" />
@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/iamLiquidX/telegram-clone-worker">
+  <a href="https://deploy.workers.cloudflare.com/?url=https://github.com/hfdz1119/telegram-clone-worker">
     <img src="https://deploy.workers.cloudflare.com/button" alt="Deploy to Cloudflare Workers" />
   </a>
 </p>
@@ -23,9 +23,21 @@
 
 ## Overview
 
-**Telegram Clone Worker** is a self-hosted, cloud-native Telegram management engine and web console designed to replicate message history between Telegram channels and groups at maximum speed, while staying completely within Telegram's rate limits and Cloudflare's free-tier boundaries.
+**Telegram Backup & Chat Worker** is a self-hosted Cloudflare Worker fork of [iamLiquidX/telegram-clone-worker](https://github.com/iamLiquidX/telegram-clone-worker), licensed under MIT. It retains the upstream task dashboard and copy engine, with safer first-run console access and an optional, explicitly invoked private-chat AI command.
 
-Whether you need to migrate an archive of 100,000+ historical media files, maintain a real-time live mirror of an active broadcast channel, or selectively forward specific media types (videos, documents, audio) above a certain file size threshold, Telegram Clone Worker handles it all automatically in the background.
+The upstream backfill, live-copy, and filtering features remain available; the new-post-only live task is the recommended starting point for this project.
+
+---
+
+## This fork's first-use path
+
+- Create one **New messages only (Live forward)** task per source-to-destination pair. To send one source to several backup channels, create one task for each destination; multiple tasks can share a bot.
+- The console runs on Cloudflare Workers with D1. The live-only scope is the wizard default; historical backfill is an optional separate scope and is not needed for a new-post-only setup.
+- With a bot that has an active live-forward task, `/chat your question` in its private chat invokes the optional OpenAI-compatible model. Ordinary messages, group messages and channel posts are not sent to the model. Each command is stateless: prior conversation turns are not retained; pausing all live tasks also pauses message polling.
+- Configure `CHAT_API_KEY` as a Cloudflare Worker Secret, and set `CHAT_MODEL` plus optional `CHAT_API_BASE_URL` as Worker variables. The key is never placed in the browser or D1 by this feature.
+- **Important credential limitation:** this upstream console currently stores Telegram bot tokens in D1 (and saved task templates may store a token there too); they are not encrypted at rest by this fork yet. Restrict Cloudflare account/D1 access and do not treat this as ready for sensitive production tokens until encrypted secret storage is implemented.
+
+This repository is a fork, not a deployment of the original project. Its initial changes preserve the upstream task engine and MIT license attribution.
 
 ---
 
@@ -77,12 +89,26 @@ Whether you need to migrate an archive of 100,000+ historical media files, maint
 - **Responsive Layout**: Docked bottom footer on desktop/tablet views and touch-friendly mobile drawer.
 - **Fail-Safe Error Boundary**: React crashes are caught gracefully with intuitive recovery actions instead of blank screens.
 
-### 🔐 Optional Admin Security & Authentication
-- **Zero-Friction Master Password**: Protect your web console by defining an optional `ADMIN_PASSWORD` secret in Cloudflare or setting one via the browser on first launch.
-- **Open Access Mode**: If you prefer an open console, simply tap "Proceed without password". You can secure it at any time directly from the console navigation.
-- **Stateless Web Crypto Sessions**: HMAC-SHA256 signed bearer tokens validated in `< 0.05ms` CPU with **zero D1 database reads/writes**, adding 0 overhead to the 4-second polling loops.
+### 🔐 Admin security
+- New installs are locked until an admin password is configured; API management routes reject unauthenticated requests during setup. There is no passwordless skip button.
+- Prefer setting a unique `ADMIN_PASSWORD` Cloudflare Worker Secret before exposing the service. First-run browser setup is available if the secret is not preset; until the first password is set, anyone who can reach the setup page could claim the initial password.
+- Passwords configured in the UI are salted and hashed in D1; sessions are signed with Web Crypto. `ALLOW_OPEN_ACCESS=true` is an explicit, unsafe opt-in that disables the password gate. Do not set it for a public Worker.
+- This protects the console, but it does **not** encrypt bot tokens already stored by the upstream D1 schema. See the credential limitation above.
 
 ---
+
+## Optional private AI chat
+
+Set these Worker settings to enable the command; keep `CHAT_API_KEY` in **Worker Secrets**, never in GitHub or browser variables:
+
+| Setting | Type | Purpose |
+| --- | --- | --- |
+| `CHAT_API_KEY` | Secret | Bearer key for the model API |
+| `CHAT_MODEL` | Variable | Provider's model identifier |
+| `CHAT_API_BASE_URL` | Variable, optional | OpenAI-compatible API base URL; defaults to `https://api.openai.com/v1` |
+| `CHAT_SYSTEM_PROMPT` | Variable, optional | System prompt; defaults to a short helpful-assistant instruction |
+
+While a bot has an active live-forward task, it sends a model request only for `/chat ...` from a human user's private chat. It sends that command text alone, with no channel content and no prior turn history. The provider may charge separately; review its pricing and privacy terms before setting a key.
 
 ## Architecture
 
@@ -138,8 +164,8 @@ flowchart LR
 
 > [!TIP]
 > **4. Bot Token Security**
-> - Bot tokens are stored securely in your private Cloudflare D1 database. They are never sent to the browser or leaked to public endpoints.
-> - Never commit bot tokens into Git or publish your D1 database dumps publicly.
+> - This fork currently inherits upstream storage behavior: bot tokens (including tokens in saved templates) are stored in D1 without application-level encryption. Treat access to the Worker and D1 database as sensitive.
+> - Never commit bot tokens into Git or publish D1 database dumps. Encrypted-at-rest token storage is not implemented yet.
 
 > [!NOTE]
 > **5. Cloudflare Free Tier Boundaries & D1 Resource Usage (50 Bots / Day)**
@@ -154,9 +180,9 @@ flowchart LR
 
 ## 1-Click Deployment (Recommended)
 
-Deploy your own instance of Telegram Clone Worker with a single click:
+Deploy this fork only after reviewing its security limitations; this repository is not yet configured with your channels or model service:
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/iamLiquidX/telegram-clone-worker)
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/hfdz1119/telegram-clone-worker)
 
 ### How It Works:
 1. Click the **Deploy with Workers** button above.
@@ -175,25 +201,26 @@ Deploy your own instance of Telegram Clone Worker with a single click:
       5. This is a **one-time step** — all future code pushes and updates will remain permanently live at this URL!
     - *(Optional)* You can also click **Add custom domain** in the same **Domains** tab to serve the application on your own branded domain (e.g. `clone.yourdomain.com`).
 5. **Zero-Config Database Initialization**:
-   - The worker features an automatic bootstrap engine ([`src/db/bootstrap.ts`](file:///C:/Users/LiquidX/Documents/Snoop%20and%20Conf/project%20bot%20access/src/db/bootstrap.ts)).
+   - The worker features an automatic bootstrap engine ([`src/db/bootstrap.ts`](src/db/bootstrap.ts)).
    - When you visit your deployed worker URL for the first time, all tables and indexes are created automatically. You do **not** need to run any manual terminal migration commands!
-6. **Configuring Admin Password (Optional)**:
-   - **Via Cloudflare Dashboard**: Go to **Workers & Pages > telegram-clone-worker > Settings > Variables and Secrets**, and add a secret named `ADMIN_PASSWORD`. When set, the console strictly requires this password to log in.
-   - **Via CLI**: Run `npx wrangler secret put ADMIN_PASSWORD` in your terminal.
-   - **Via Browser**: If you do not configure `ADMIN_PASSWORD`, opening the console for the first time will ask if you want to set an admin password or proceed with open access. You can protect or unprotect your console at any time.
+6. **Configuring Admin Password (Required unless intentionally open)**:
+   - **Before exposing the Worker**: Go to **Workers & Pages > telegram-clone-worker > Settings > Variables and Secrets**, and add a unique secret named `ADMIN_PASSWORD` (at least 12 characters). The console requires it for admin access.
+   - **Via CLI**: Run `npx wrangler secret put ADMIN_PASSWORD` in your terminal before enabling the public Worker URL.
+   - **Via Browser**: If you do not preset `ADMIN_PASSWORD`, the first visit requires setting a password of at least 12 characters. The setup endpoint is reachable before this first password is set, so preset the secret before exposing the Worker to avoid an initial-setup race.
 
 ---
 
 ## Updating Your Deployment
 
-When new features or bug fixes are released upstream, you can update your deployment in seconds:
+To update your fork, push changes to its `main` branch. To deliberately pull upstream changes, review them before merging:
 
 ```bash
-git pull https://github.com/iamLiquidX/telegram-clone-worker.git main
+git add -A
+git commit -m "Describe your change"
 git push origin main
 ```
 
-Because Cloudflare Workers Builds is connected to your repository, pushing to `main` automatically triggers Cloudflare to build and redeploy the latest version to your live URL!
+When Cloudflare Workers Builds is connected to this fork, a push to `main` triggers its configured build and deployment. No Cloudflare project has been connected or deployed by this repository change.
 
 ---
 
@@ -208,7 +235,7 @@ If you prefer to run or customize the project locally:
 
 ### 2. Clone & Install
 ```bash
-git clone https://github.com/iamLiquidX/telegram-clone-worker.git
+git clone https://github.com/hfdz1119/telegram-clone-worker.git
 cd telegram-clone-worker
 npm install
 ```
@@ -217,7 +244,7 @@ npm install
 ```bash
 npx wrangler d1 create telegram-clone-worker-db
 ```
-Copy the `database_id` from Wrangler's output and update it in [`wrangler.jsonc`](file:///C:/Users/LiquidX/Documents/Snoop%20and%20Conf/project%20bot%20access/wrangler.jsonc):
+Copy the `database_id` from Wrangler's output and update it in [`wrangler.jsonc`](wrangler.jsonc):
 ```jsonc
 "d1_databases": [
   {
@@ -289,5 +316,6 @@ All API endpoints run under the `/api` route:
 
 - **Author**: [iamLiquidX](https://github.com/iamLiquidX)
 - **Support Chat**: [Telegram Community](https://t.me/liquidxprojects)
-- **Source Code**: [GitHub Repository](https://github.com/iamLiquidX/telegram-clone-worker)
+- **This fork**: [hfdz1119/telegram-clone-worker](https://github.com/hfdz1119/telegram-clone-worker)
+- **Upstream**: [iamLiquidX/telegram-clone-worker](https://github.com/iamLiquidX/telegram-clone-worker)
 - **License**: [MIT](LICENSE)

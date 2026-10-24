@@ -1,4 +1,5 @@
 import { TelegramClient } from "../telegram/client";
+import { handlePrivateChatCommand } from "../telegram/aiChat";
 import { TelegramApiError } from "../telegram/errors";
 import {
   advanceTaskProgress,
@@ -117,12 +118,18 @@ export async function runTick(env: Env): Promise<void> {
             const updates = await client.getUpdates({
               offset: currentOffset,
               limit: 100,
-              allowed_updates: ["channel_post"],
+              allowed_updates: ["message", "channel_post"],
             });
             if (!updates || updates.length === 0) break;
 
             for (const update of updates) {
               if (update.update_id > maxUpdateId) maxUpdateId = update.update_id;
+              // Explicit /chat is accepted only in a human user's private chat.
+              // Channel posts are handled below solely by the backup route logic.
+              if (update.message) {
+                await handlePrivateChatCommand(client, env, update.message);
+              }
+
               const post = update.channel_post;
               if (!post) continue;
               const chatStr = String(post.chat.id);
